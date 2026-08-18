@@ -1554,3 +1554,18 @@ body {
     gap: 10px;
   }
 }
+
+/* Device Spoof inside TikTok mode */
+.tt-device-spoof {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--orange-200);
+}
+
+.device-spoof-panel {
+  margin-top: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--orange-200);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}

@@ -119,7 +119,96 @@ DOM.metaToggle.addEventListener('change', () => {
     DOM.metaTechniques.classList.add('hidden');
     DOM.metaBadge.textContent = 'OFF';
     DOM.metaBadge.classList.remove('active');
+    // Also turn off device spoof when randomize is off
+    if (ttDeviceToggle.checked) {
+      ttDeviceToggle.checked = false;
+      ttDeviceToggle.dispatchEvent(new Event('change'));
+    }
     DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download';
+  }
+});
+
+// ==========================================
+// Device Spoof inside TikTok Mode
+// ==========================================
+const ttDeviceToggle = document.getElementById('ttDeviceToggle');
+const ttDeviceBadge = document.getElementById('ttDeviceBadge');
+const ttDevicePanel = document.getElementById('ttDevicePanel');
+const ttDeviceGrid = document.getElementById('ttDeviceGrid');
+const ttSpoofRandomDate = document.getElementById('ttSpoofRandomDate');
+const ttSpoofRandomLocation = document.getElementById('ttSpoofRandomLocation');
+
+let ttDevicePresets = { iphone: [], pixel: [] };
+let ttSelectedDevice = 'random-all';
+let ttActiveBrand = 'iphone';
+
+async function loadTtDevicePresets() {
+  try {
+    const res = await fetch('/api/device-presets');
+    const data = await res.json();
+    if (data.success) {
+      ttDevicePresets = data.presets;
+      renderTtDeviceGrid();
+    }
+  } catch (e) {}
+}
+loadTtDevicePresets();
+
+function renderTtDeviceGrid() {
+  const devices = ttDevicePresets[ttActiveBrand] || [];
+  ttDeviceGrid.innerHTML = devices.map(d => `
+    <button class="device-card ${ttSelectedDevice === d.key ? 'selected' : ''}" data-device="${d.key}">
+      <span class="device-card-icon">${ttActiveBrand === 'iphone' ? '🍎' : '🤖'}</span>
+      <span class="device-card-name">${escapeHtml(d.name)}</span>
+    </button>
+  `).join('');
+
+  ttDeviceGrid.querySelectorAll('.device-card').forEach(card => {
+    card.addEventListener('click', () => {
+      ttSelectedDevice = card.dataset.device;
+      document.querySelectorAll('input[name="ttDeviceChoice"]').forEach(r => r.checked = false);
+      renderTtDeviceGrid();
+    });
+  });
+}
+
+document.querySelectorAll('[data-ttbrand]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-ttbrand]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ttActiveBrand = btn.dataset.ttbrand;
+    renderTtDeviceGrid();
+  });
+});
+
+document.querySelectorAll('input[name="ttDeviceChoice"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) {
+      ttSelectedDevice = radio.value;
+      renderTtDeviceGrid();
+    }
+  });
+});
+
+ttDeviceToggle.addEventListener('change', () => {
+  const isOn = ttDeviceToggle.checked;
+  if (isOn) {
+    // Device spoof requires randomize metadata
+    if (!DOM.metaToggle.checked) {
+      DOM.metaToggle.checked = true;
+      DOM.metaToggle.dispatchEvent(new Event('change'));
+    }
+    ttDevicePanel.classList.remove('hidden');
+    ttDeviceBadge.textContent = 'ON';
+    ttDeviceBadge.classList.add('active');
+    DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download + Device Spoof';
+  } else {
+    ttDevicePanel.classList.add('hidden');
+    ttDeviceBadge.textContent = 'OFF';
+    ttDeviceBadge.classList.remove('active');
+    DOM.downloadBtn.innerHTML = DOM.metaToggle.checked
+      ? '<span>⚡</span> GOD MODE Download + Randomize'
+      : '<span>⚡</span> GOD MODE Download';
   }
 });
 
@@ -258,6 +347,16 @@ function showMetaInfo(index, metaInfo) {
   }
 }
 
+function showDeviceInfo(index, deviceInfo) {
+  const metaInfoEl = document.getElementById(`meta-info-${index}`);
+  if (metaInfoEl && deviceInfo) {
+    metaInfoEl.style.display = 'flex';
+    const parts = [deviceInfo.deviceName, deviceInfo.software];
+    if (deviceInfo.locationName) parts.push(`📍 ${deviceInfo.locationName}`);
+    metaInfoEl.innerHTML = `📱 ${parts.join(' · ')}`;
+  }
+}
+
 function updateSummaryStats() {
   const items = Object.values(downloadItems);
   const total = items.length;
@@ -311,7 +410,7 @@ function connectSSE(sessionId) {
 }
 
 function handleProgressEvent(data) {
-  const { index, type, percent, detail, filename, title, metaApplied, metaInfo, metaError } = data;
+  const { index, type, percent, detail, filename, title, metaApplied, metaInfo, metaError, deviceInfo } = data;
   switch (type) {
     case 'start':
       downloadItems[index] = { status: 'downloading' };
@@ -335,8 +434,13 @@ function handleProgressEvent(data) {
       updateQueueItemStatus(index, 'complete');
       if (filename) addDownloadButton(index, filename);
       if (metaApplied && metaInfo) {
-        showMetaInfo(index, metaInfo);
-        showToast(`Video #${index + 1} — GOD MODE ✅`, 'success');
+        if (deviceInfo) {
+          showDeviceInfo(index, deviceInfo);
+          showToast(`Video #${index + 1} spoofed as ${deviceInfo.deviceName} ✅`, 'success');
+        } else {
+          showMetaInfo(index, metaInfo);
+          showToast(`Video #${index + 1} — GOD MODE ✅`, 'success');
+        }
       } else if (metaApplied === false && metaError) {
         showToast(`Video #${index + 1} downloaded (meta failed)`, 'info');
       } else {
@@ -351,7 +455,13 @@ function handleProgressEvent(data) {
     case 'all_done':
       showToast('All processing finished! ⚡', 'success');
       DOM.downloadBtn.disabled = false;
-      DOM.downloadBtn.innerHTML = DOM.metaToggle.checked ? '<span>⚡</span> GOD MODE Download + Randomize' : '<span>⚡</span> GOD MODE Download';
+      if (ttDeviceToggle.checked) {
+        DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download + Device Spoof';
+      } else if (DOM.metaToggle.checked) {
+        DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download + Randomize';
+      } else {
+        DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download';
+      }
       if (eventSource) { eventSource.close(); eventSource = null; }
       break;
   }
@@ -368,6 +478,12 @@ DOM.downloadBtn.addEventListener('click', async () => {
   const urls = urlEntries.map(e => e.url);
   const saveNames = urlEntries.map(e => e.saveName);
   const randomizeMeta = DOM.metaToggle.checked;
+  const deviceSpoof = {
+    enabled: ttDeviceToggle.checked,
+    device: ttSelectedDevice,
+    randomDate: ttSpoofRandomDate.checked,
+    randomLocation: ttSpoofRandomLocation.checked
+  };
 
   if (randomizeMeta && !ffmpegAvailable) {
     showToast('FFmpeg not detected!', 'error');
@@ -391,7 +507,7 @@ DOM.downloadBtn.addEventListener('click', async () => {
     const response = await fetch('/api/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, saveNames, randomizeMeta }),
+      body: JSON.stringify({ urls, saveNames, randomizeMeta, deviceSpoof }),
     });
     const result = await response.json();
     if (result.success) {
@@ -401,14 +517,20 @@ DOM.downloadBtn.addEventListener('click', async () => {
     } else {
       showToast(result.error || 'Failed', 'error');
       DOM.downloadBtn.disabled = false;
-      DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download';
+      DOM.downloadBtn.innerHTML = getDownloadBtnLabel();
     }
   } catch (err) {
     showToast('Connection error', 'error');
     DOM.downloadBtn.disabled = false;
-    DOM.downloadBtn.innerHTML = '<span>⚡</span> GOD MODE Download';
+    DOM.downloadBtn.innerHTML = getDownloadBtnLabel();
   }
 });
+
+function getDownloadBtnLabel() {
+  if (ttDeviceToggle.checked) return '<span>⚡</span> GOD MODE Download + Device Spoof';
+  if (DOM.metaToggle.checked) return '<span>⚡</span> GOD MODE Download + Randomize';
+  return '<span>⚡</span> GOD MODE Download';
+}
 
 updateUrlCount();
 

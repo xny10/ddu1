@@ -387,13 +387,15 @@ function cameraDescription(model) {
   return `${model} back dual camera 6.1mm f/1.6`;
 }
 
-async function processVideoWithDeviceSpoof(inputPath, outputPath, deviceMeta) {
+async function processVideoWithDeviceSpoof(inputPath, outputPath, deviceMeta, options = {}) {
   if (!ffmpeg) {
     throw new Error('FFmpeg not available. Install fluent-ffmpeg and ensure ffmpeg is in PATH.');
   }
 
   return new Promise((resolve, reject) => {
     const isApple = deviceMeta.make === 'Apple';
+    const includeRandomMeta = options.includeRandomMeta === true;
+    const randomMeta = includeRandomMeta ? generateRandomMetadata() : null;
 
     // Subtle noise so the file hash changes without visible quality loss
     const noiseStrength = randomFloat(0.2, 0.8, 2);
@@ -421,10 +423,44 @@ async function processVideoWithDeviceSpoof(inputPath, outputPath, deviceMeta) {
       metadataArgs.push('-metadata', `location=${deviceMeta.location}`);
     }
 
+    // Gabungkan juga metadata random (title, artist, comment, description, dll)
+    if (randomMeta) {
+      metadataArgs.push(
+        '-metadata', `title=${randomMeta.title}`,
+        '-metadata', `artist=${randomMeta.artist}`,
+        '-metadata', `author=${randomMeta.author}`,
+        '-metadata', `comment=${randomMeta.comment}`,
+        '-metadata', `description=${randomMeta.description}`,
+        '-metadata', `publisher=${randomMeta.publisher}`,
+        '-metadata', `keywords=${randomMeta.keywords}`
+      );
+    }
+
+    // Filter video/audio: saat includeRandomMeta, pakai teknik uniqueness penuh
+    const videoFilters = [`noise=alls=${noiseStrength}:allf=t+u`];
+    const audioFilters = [];
+    let audioBitrate = '192k';
+
+    if (includeRandomMeta) {
+      const pitchFactor = 1 + (Math.random() * 0.012 - 0.006);
+      const tempoFactor = 1 / pitchFactor;
+      const brightness = randomFloat(-0.01, 0.01);
+      const contrast = randomFloat(0.98, 1.02);
+      const saturation = randomFloat(0.98, 1.03);
+
+      videoFilters.unshift(`eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}`);
+      audioFilters.push(
+        `asetrate=44100*${pitchFactor.toFixed(4)}`,
+        'aresample=44100',
+        `atempo=${tempoFactor.toFixed(4)}`
+      );
+      audioBitrate = getRandomElement(['128k', '144k', '160k', '176k', '192k']);
+    }
+
     let command = ffmpeg(inputPath)
       .outputOptions(['-y'])
       .outputOptions(['-map_metadata', '-1'])
-      .videoFilters([`noise=alls=${noiseStrength}:allf=t+u`])
+      .videoFilters(videoFilters)
       .videoCodec('libx264')
       .outputOptions(['-crf', crf.toString()])
       .outputOptions(['-preset', 'veryfast'])
@@ -433,9 +469,13 @@ async function processVideoWithDeviceSpoof(inputPath, outputPath, deviceMeta) {
       .outputOptions(['-color_trc', 'bt709'])
       .outputOptions(['-colorspace', 'bt709'])
       .audioCodec('aac')
-      .audioBitrate('192k')
+      .audioBitrate(audioBitrate)
       .outputOptions(metadataArgs)
       .output(outputPath);
+
+    if (audioFilters.length > 0) {
+      command = command.audioFilters(audioFilters);
+    }
 
     command
       .on('start', (commandLine) => {
@@ -448,7 +488,7 @@ async function processVideoWithDeviceSpoof(inputPath, outputPath, deviceMeta) {
       })
       .on('end', () => {
         console.log('[FFmpeg DeviceSpoof] Processing finished successfully');
-        resolve({ ...deviceMeta, encoder: encoderTag });
+        resolve({ ...deviceMeta, encoder: encoderTag, randomMeta });
       })
       .on('error', (err, stdout, stderr) => {
         console.error('[FFmpeg DeviceSpoof] Error:', err.message);
@@ -587,7 +627,9 @@ async function processSpoofedVideo(sessionId, index) {
     const outputFilename = `spoof_${deviceSlug}_${safeName}_${Date.now()}.mp4`;
     const outputPath = path.join(session.sessionDir, outputFilename);
 
-    const metaResult = await processVideoWithDeviceSpoof(file.path, outputPath, deviceMeta);
+    const metaResult = await processVideoWithDeviceSpoof(file.path, outputPath, deviceMeta, {
+      includeRandomMeta: true
+    });
 
     // Remove original uploaded file
     fs.unlinkSync(file.path);
@@ -1299,7 +1341,9 @@ async function downloadVideo(sessionId, url, index) {
             randomDate: session.deviceSpoof.randomDate !== false,
             randomLocation: session.deviceSpoof.randomLocation !== false
           });
-          metaResult = await processVideoWithDeviceSpoof(outputPath, metaOutputPath, deviceMeta);
+          metaResult = await processVideoWithDeviceSpoof(outputPath, metaOutputPath, deviceMeta, {
+            includeRandomMeta: true
+          });
           deviceInfo = metaResult;
         } else {
           metaResult = await processVideoWithFFmpeg(outputPath, metaOutputPath);

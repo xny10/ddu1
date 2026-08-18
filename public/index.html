@@ -137,6 +137,57 @@
                 <span class="tech-name">Audio Pitch ±0.01</span>
               </div>
             </div>
+
+            <!-- Device Spoof Integration -->
+            <div class="tt-device-spoof">
+              <div class="meta-toggle-header">
+                <div class="meta-toggle-info">
+                  <div class="meta-toggle-title">
+                    <span class="meta-icon">📱</span>
+                    <span>Device Spoof</span>
+                    <span class="meta-badge" id="ttDeviceBadge">OFF</span>
+                  </div>
+                  <p class="meta-toggle-desc">Langsung tulis metadata device (iPhone 11–17 Pro Max / Google Pixel) ke video hasil download</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="ttDeviceToggle">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="device-spoof-panel hidden" id="ttDevicePanel">
+                <div class="device-brand-tabs">
+                  <button class="device-brand-tab active" data-ttbrand="iphone">🍎 iPhone</button>
+                  <button class="device-brand-tab" data-ttbrand="pixel">🤖 Google Pixel</button>
+                </div>
+                <div class="device-grid" id="ttDeviceGrid"></div>
+                <div class="device-random-row">
+                  <label class="device-random-option">
+                    <input type="radio" name="ttDeviceChoice" value="random-all" checked>
+                    <span>🎲 Random (any device)</span>
+                  </label>
+                  <label class="device-random-option">
+                    <input type="radio" name="ttDeviceChoice" value="random-iphone">
+                    <span>🎲 Random iPhone</span>
+                  </label>
+                  <label class="device-random-option">
+                    <input type="radio" name="ttDeviceChoice" value="random-pixel">
+                    <span>🎲 Random Pixel</span>
+                  </label>
+                </div>
+                <div class="spoof-options">
+                  <label class="spoof-option-toggle">
+                    <input type="checkbox" id="ttSpoofRandomDate" checked>
+                    <span>⏰ Random creation date (last 7 days)</span>
+                  </label>
+                  <label class="spoof-option-toggle">
+                    <input type="checkbox" id="ttSpoofRandomLocation" checked>
+                    <span>📍 Random GPS location tag</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div class="meta-warning" id="ffmpegWarning" style="display:none;">
               <span>⚠️</span> FFmpeg not detected. Please install FFmpeg to use this feature.
             </div>

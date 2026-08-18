@@ -1045,7 +1045,7 @@ app.get('/api/upload-download-all', (req, res) => {
 // API: Start downloads
 // ==========================================
 app.post('/api/download', (req, res) => {
-  const { urls, saveNames, randomizeMeta } = req.body;
+  const { urls, saveNames, randomizeMeta, deviceSpoof } = req.body;
 
   if (!urls || !Array.isArray(urls) || urls.length === 0) {
     return res.json({ success: false, error: 'No URLs provided' });
@@ -1064,6 +1064,7 @@ app.post('/api/download', (req, res) => {
     saveNames: saveNames || urls.map(() => ''),
     sessionDir,
     randomizeMeta: !!randomizeMeta,
+    deviceSpoof: deviceSpoof && deviceSpoof.enabled ? deviceSpoof : null,
     status: urls.map(() => 'waiting'),
     files: {},
     clients: [],
@@ -1273,16 +1274,36 @@ async function downloadVideo(sessionId, url, index) {
       writer.on('error', reject);
     });
 
-    // 3. If randomizeMeta is ON, process with FFmpeg
+    // 3. If randomizeMeta is ON, process with FFmpeg (optionally with Device Spoof)
     if (session.randomizeMeta) {
-      sendSSE(sessionId, { index, type: 'meta_start', detail: 'Randomizing metadata...' });
+      const useDeviceSpoof = !!(session.deviceSpoof && session.deviceSpoof.enabled);
+      sendSSE(sessionId, {
+        index,
+        type: 'meta_start',
+        detail: useDeviceSpoof ? 'Spoofing device metadata...' : 'Randomizing metadata...'
+      });
 
-      const metaBaseName = customSaveName ? `godmode_${customSaveName}` : `godmode_${safeTitle || 'video'}`;
+      const prefix = useDeviceSpoof ? 'spoof' : 'godmode';
+      const metaBaseName = customSaveName ? `${prefix}_${customSaveName}` : `${prefix}_${safeTitle || 'video'}`;
       const metaFilename = `${metaBaseName}_${videoData.id}.mp4`;
       const metaOutputPath = path.join(session.sessionDir, metaFilename);
 
       try {
-        const metaResult = await processVideoWithFFmpeg(outputPath, metaOutputPath);
+        let metaResult;
+        let deviceInfo = null;
+
+        if (useDeviceSpoof) {
+          // Each video gets its own randomized device identity
+          const preset = resolveDevicePreset(session.deviceSpoof.device);
+          const deviceMeta = generateDeviceMetadata(preset, {
+            randomDate: session.deviceSpoof.randomDate !== false,
+            randomLocation: session.deviceSpoof.randomLocation !== false
+          });
+          metaResult = await processVideoWithDeviceSpoof(outputPath, metaOutputPath, deviceMeta);
+          deviceInfo = metaResult;
+        } else {
+          metaResult = await processVideoWithFFmpeg(outputPath, metaOutputPath);
+        }
 
         // Remove original, keep processed
         fs.unlinkSync(outputPath);
@@ -1294,7 +1315,8 @@ async function downloadVideo(sessionId, url, index) {
           type: 'complete',
           filename: metaFilename,
           metaApplied: true,
-          metaInfo: metaResult
+          metaInfo: metaResult,
+          deviceInfo
         });
       } catch (ffmpegErr) {
         console.error(`[FFmpeg Error #${index}]:`, ffmpegErr.message);

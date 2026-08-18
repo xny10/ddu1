@@ -353,6 +353,9 @@ function showDeviceInfo(index, deviceInfo) {
     metaInfoEl.style.display = 'flex';
     const parts = [deviceInfo.deviceName, deviceInfo.software];
     if (deviceInfo.locationName) parts.push(`📍 ${deviceInfo.locationName}`);
+    if (deviceInfo.randomMeta) {
+      parts.push(`🎲 ${deviceInfo.randomMeta.artist} · ${deviceInfo.randomMeta.title}`);
+    }
     metaInfoEl.innerHTML = `📱 ${parts.join(' · ')}`;
   }
 }
@@ -436,7 +439,7 @@ function handleProgressEvent(data) {
       if (metaApplied && metaInfo) {
         if (deviceInfo) {
           showDeviceInfo(index, deviceInfo);
-          showToast(`Video #${index + 1} spoofed as ${deviceInfo.deviceName} ✅`, 'success');
+          showToast(`Video #${index + 1} spoofed as ${deviceInfo.deviceName} + random meta ✅`, 'success');
         } else {
           showMetaInfo(index, metaInfo);
           showToast(`Video #${index + 1} — GOD MODE ✅`, 'success');
@@ -1185,6 +1188,9 @@ function showSpoofDeviceInfo(index, deviceInfo) {
     metaInfoEl.style.display = 'flex';
     const parts = [deviceInfo.deviceName, deviceInfo.software];
     if (deviceInfo.locationName) parts.push(`📍 ${deviceInfo.locationName}`);
+    if (deviceInfo.randomMeta) {
+      parts.push(`🎲 ${deviceInfo.randomMeta.artist} · ${deviceInfo.randomMeta.title}`);
+    }
     metaInfoEl.innerHTML = `📱 ${parts.join(' · ')}`;
   }
 }
